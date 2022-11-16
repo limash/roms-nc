@@ -4,7 +4,7 @@ disable=
 
 [BASIC]
 # Good variable names which should always be accepted, separated by a comma.
-good-names=i, j, k, df, foo, bar, ax, l0, l1, l2, ds
+good-names=i, j, k, df, foo, bar, ax, l0, l1, l2, ds, xi
 
 [FORMAT]
 max-line-length=119

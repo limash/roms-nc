@@ -1,8 +1,12 @@
 """
 Function for ROMS output files.
 """
+from typing import Optional
+
 import numpy as np
 import scipy as sp
+import xarray as xr
+import matplotlib.pyplot as plt
 
 
 def tranform_to_z(ds):
@@ -29,51 +33,46 @@ def roho160_tranform_to_z(ds):
     return z_rho.transpose()
 
 
-def check_rivers_runoff(ds, verbose=False, runoff=0):
-    """
-    Returns coordinates and direction for
-    rivers with runoff >= threshold
-    """
-    river_xi_eta_dir = []
-    for i in range(ds.dims['river']):
-        river = ds.isel(river=i, river_time=0)
-        assert i+1 == int(river.river)
-        cell_runoff = (abs(river.river_transport) * river.river_Vshape).max().values
-        if cell_runoff >= runoff:
-            if verbose:
-                print(f"River {i+1} max runoff: {cell_runoff}")
-                print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
-                print(f"Direction: {river.river_direction} \n")
-            river_xi_eta_dir.append((
-                int(river.river),
-                int(river.river_Xposition.values),
-                int(river.river_Eposition.values),
-                int(river.river_direction.values)
-            ))
-    return river_xi_eta_dir
-
-
-def gen_rivers_map(ds, grid_ds):
-    """
-    Generates a numpy array with NaN values at the places of rivers.
-    """
-    map_shape = grid_ds.dims['xi_rho'], grid_ds.dims['eta_rho']
-    riv_map = np.ones(map_shape)
-    for river_id in ds.river.values:
-        river_id = int(river_id-1)
-        x_pos = int(ds.river_Xposition[river_id].values)
-        y_pos = int(ds.river_Eposition[river_id].values)
-        riv_map[x_pos, y_pos] = np.NaN
-
-    return riv_map
-
-
 class GridHandler:
     """
     Provides some method to fix ROMS grid.
     """
     def __init__(self, grid_ds):
+        self.up_xi = grid_ds.dims['xi_rho'] - 1
+        self.up_eta = grid_ds.dims['eta_rho'] - 1
         self.grid_ds = grid_ds
+
+    def get_xi_slice(self, xi, delta):
+        return slice(max(min(xi - delta, self.up_xi), 0), max(min(xi + delta + 1, self.up_xi), 0))
+
+    def get_eta_slice(self, eta, delta):
+        return slice(max(min(eta - delta, self.up_eta), 0), max(min(eta + delta + 1, self.up_eta), 0))
+
+    def plot_h(self, xi, eta, delta):
+
+        plt.figure(figsize=(5, 5))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        h = self.grid_ds.h.isel(xi_rho=xi_slice, eta_rho=eta_slice) * \
+            self.grid_ds.mask_rho.isel(xi_rho=xi_slice, eta_rho=eta_slice)
+
+        plt.subplot(111)
+        h.plot()
+
+    def plot_masks(self, xi, eta, delta=10):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        plt.subplot(121)
+        self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice).plot()
+
+        plt.subplot(122)
+        self.grid_ds.mask_v.isel(xi_v=xi_slice, eta_v=eta_slice).plot()
 
     @staticmethod
     def update_u_v_psi_masks_from_rho_mask(grid_ds):
@@ -175,6 +174,308 @@ class GridHandler:
         print(f"North values: {self.get_values(eta_rho=up_eta_rho-1, xi_rho=north_idx.squeeze())}")
         print(f"East values: {self.get_values(eta_rho=east_idx.squeeze(), xi_rho=up_xi_rho-1)}")
         print(f"South values: {self.get_values(eta_rho=0, xi_rho=south_idx.squeeze())}")
+
+
+class RiversHandler:
+    """
+    Provides rivers forcing related methods.
+    """
+    def __init__(self, grid_ds):
+        self.up_xi = grid_ds.dims['xi_rho'] - 1
+        self.up_eta = grid_ds.dims['eta_rho'] - 1
+        self.grid_ds = grid_ds
+
+    def get_xi_slice(self, xi, delta):
+        return slice(max(min(xi - delta, self.up_xi), 0), max(min(xi + delta + 1, self.up_xi), 0))
+
+    def get_eta_slice(self, eta, delta):
+        return slice(max(min(eta - delta, self.up_eta), 0), max(min(eta + delta + 1, self.up_eta), 0))
+
+    def plot_river_estuary_u(self, river, river_xi, river_eta, river_dir):
+
+        assert river_dir == 0
+        mask_u = self.grid_ds.mask_u.copy()
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(river_xi, 4)
+        eta_slice = self.get_eta_slice(river_eta, 4)
+
+        plt.subplot(121)
+        mask_u.isel(
+            xi_u=xi_slice,
+            eta_u=eta_slice,
+            ).plot()
+
+        mask_u[dict(xi_u=river_xi, eta_u=river_eta)] = np.nan
+
+        plt.subplot(122)
+        mask_u.isel(
+            xi_u=xi_slice,
+            eta_u=eta_slice,
+            ).plot()
+        # to show the fortran locations
+        plt.suptitle(f"River: {river}; Xi: {river_xi+1}; Eta: {river_eta}; Direction: {river_dir}.")
+
+    def plot_river_estuary_v(self, river, river_xi, river_eta, river_dir):
+
+        assert river_dir == 1
+        mask_v = self.grid_ds.mask_v.copy()
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(river_xi, 4)
+        eta_slice = self.get_eta_slice(river_eta, 4)
+
+        plt.subplot(121)
+        mask_v.isel(
+            xi_v=xi_slice,
+            eta_v=eta_slice,
+            ).plot()
+
+        mask_v[dict(xi_v=river_xi, eta_v=river_eta)] = np.nan
+
+        plt.subplot(122)
+        mask_v.isel(
+            xi_v=xi_slice,
+            eta_v=eta_slice,
+            ).plot()
+        # to show the fortran locations
+        plt.suptitle(f"River: {river}; Xi: {river_xi}; Eta: {river_eta+1}; Direction: {river_dir}.")
+
+    def plot_river_estuary_rho(self, river, river_xi, river_eta, river_dir):
+
+        mask_rho = self.grid_ds.mask_rho.copy()
+        plt.figure(figsize=(15, 4))
+
+        plt.subplot(121)
+        mask_rho.isel(
+            xi_rho=slice(river_xi - 4, river_xi + 5),
+            eta_rho=slice(river_eta - 4, river_eta + 5)
+            ).plot()
+
+        mask_rho[dict(xi_rho=river_xi, eta_rho=river_eta)] = np.nan
+
+        plt.subplot(122)
+        mask_rho.isel(
+            xi_rho=slice(river_xi - 4, river_xi + 5),
+            eta_rho=slice(river_eta - 4, river_eta + 5)
+            ).plot()
+        # to show the fortran locations
+        plt.suptitle(f"River: {river}; Xi: {river_xi+1}; Eta: {river_eta+1}; Direction: {river_dir}.")
+
+    def plot_rivers_luv(self, river_xi_eta_dir):
+        """
+        Probably, not sure: Due to roms notation where rho points start from zero
+        (so not such points in fortran), eta coordinate in mask_u already "has"
+        pythonic coordinates : bullshit - smth probably bad with a rivers forcing.
+        https://www.myroms.org/wiki/Grid_Generation
+
+        Args:
+            river_xi_eta_dir: a list of river, xi, eta, dir
+        """
+        for river, xi, eta, direction in river_xi_eta_dir:
+            if direction == 0:
+                xi, eta = xi - 1, eta
+                self.plot_river_estuary_u(river, xi, eta, direction)
+            else:
+                xi, eta = xi, eta - 1
+                self.plot_river_estuary_v(river, xi, eta, direction)
+
+    def plot_rivers_lw(self, river_xi_eta_dir):
+        for river, xi, eta, direction in river_xi_eta_dir:
+            self.plot_river_estuary_rho(river, xi-1, eta-1, direction)
+
+    @staticmethod
+    def to_netcdf(ds, name):
+        ds.to_netcdf(path=f'fram_data/norfjords_160m_river_{name}.nc', format='NETCDF4')
+
+    @staticmethod
+    def add_s_layers(river_ds):
+        # Creating new array to fill the gaps
+        v_data = np.zeros((5, 175))
+        v_add = xr.DataArray(v_data, dims=river_ds['river_Vshape'].dims, coords=river_ds['river_Vshape'].coords)
+        temp_data = np.ones((4019, 5, 175)) * 5
+        t_add = xr.DataArray(temp_data, dims=river_ds['river_temp'].dims, coords=river_ds['river_temp'].coords)
+        salt_data = np.ones((4019, 5, 175))
+        s_add = xr.DataArray(salt_data, dims=river_ds['river_salt'].dims, coords=river_ds['river_salt'].coords)
+
+        # New ready data arrays
+        river_vshape = xr.concat([v_add, river_ds['river_Vshape']], dim="s_rho")
+        river_temp = xr.concat([t_add, river_ds['river_temp']], dim="s_rho")
+        river_salt = xr.concat([s_add, river_ds['river_salt']], dim="s_rho")
+
+        # Remove old and add new variables with new s_rho=40 dimension
+        river_ds = river_ds.drop_dims('s_rho')
+        river_ds = river_ds.assign(river_Vshape=river_vshape, river_temp=river_temp, river_salt=river_salt)
+
+        return river_ds
+
+    @staticmethod
+    def check_coords(ds, xi, eta):
+        """
+        Locate rivers around the provided coordinates.
+        """
+        xis = [xi + i for i in range(-10, 11)]
+        etas =  [eta + i for i in range(-10, 11)]
+        for river_id_orig in ds.river.values:
+            river_id = int(river_id_orig-1)
+            x_pos = int(ds.river_Xposition[river_id].values)
+            y_pos = int(ds.river_Eposition[river_id].values)
+            if x_pos in xis and y_pos in etas:
+                print(f"River: {int(river_id_orig)}; Xi: {x_pos}; Eta: {y_pos}")
+
+    @staticmethod
+    def check_rivers_runoff(river_ds, verbose=False, runoff=0):
+        """
+        Returns coordinates and direction for rivers with runoff >= threshold
+        By default it will return all rivers (runoff > 0)
+        """
+        river_xi_eta_dir = []
+        for i in range(river_ds.dims['river']):
+            river = river_ds.isel(river=i, river_time=0)
+            assert i+1 == int(river.river)
+            cell_runoff = (abs(river.river_transport) * river.river_Vshape).max().values
+            if cell_runoff >= runoff:
+                if verbose:
+                    print(f"River {i+1} max runoff: {cell_runoff}")
+                    print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
+                    print(f"Direction: {river.river_direction} \n")
+                river_xi_eta_dir.append((
+                    int(river.river),
+                    int(river.river_Xposition.values),
+                    int(river.river_Eposition.values),
+                    int(river.river_direction.values)
+                ))
+
+        return river_xi_eta_dir
+
+    @staticmethod
+    def gen_rivers_map(river_ds, grid_ds):
+        """
+        Generates a numpy array with NaN values at the places of rivers.
+        It puts them to the rho coordinates, so the coordinates are approximate.
+        """
+        map_shape = grid_ds.dims['xi_rho'], grid_ds.dims['eta_rho']
+        riv_map = np.ones(map_shape)
+        for river_id in river_ds.river.values:
+            river_id = int(river_id-1)
+            x_pos = int(river_ds.river_Xposition[river_id].values)
+            y_pos = int(river_ds.river_Eposition[river_id].values)
+            riv_map[x_pos, y_pos] = np.NaN
+
+        return riv_map
+
+    @staticmethod
+    def mask_all_rivers(river_ds):
+        river_ds['river_transport'].values = np.zeros((4019, 175))
+
+        return river_ds
+
+    @staticmethod
+    def mask_some_rivers(river_ds, rivers):
+        """
+        Assignment uses i locations (implicit)
+        """
+
+        try:
+            river_ds.river_transport[dict(river=rivers)] = np.zeros((4019, 1))
+        except ValueError:
+            river_ds.river_transport[dict(river=rivers)] = np.zeros((4019))
+
+        return river_ds
+
+    @staticmethod
+    def split_river(
+        ds,
+        number: float,
+        dir_swap: bool = False,
+        flux_swap: bool = False,
+        f_xi: Optional[float] = None,
+        f_eta: Optional[float] = None,
+        s_xi: Optional[float] = None,
+        s_eta: Optional[float] = None,
+        ):
+        """
+        Decrease flux twice at the current position.
+        Adds a new river at the provided position.
+
+        Args:
+            ds: Entire dataset to change.
+            number: river coordinate number
+            dir_swap: river ROMS direction
+            flux_swap: multiplies by -1 if True
+            f_xi: current river new xi coordinate
+            f_eta: current river eta new coordinate
+            s_xi: new river xi coordinate
+            s_eta: new river eta coordinate
+
+        Returns:
+            ds: a new dataset with an additional 'river'.
+        """
+        directions = {
+            0: 1,
+            1: 0,
+        }
+
+        river_ds = ds.sel(river=number)
+
+        if dir_swap:
+            direction = river_ds.river_direction.values
+            river_ds.river_direction.values = directions[int(direction)]
+
+        if_swap = -1 if flux_swap else 1
+        river_ds.river_transport.values = if_swap * 1/2 * river_ds.river_transport.values
+
+        if f_xi is not None:
+            river_ds.river_Xposition.values = f_xi
+        if f_eta is not None:
+            river_ds.river_Eposition.values = f_eta
+
+        ds.loc[dict(river=number)] = river_ds
+
+        if s_xi is not None:
+            river_ds.river_Xposition.values = s_xi
+        if s_eta is not None:
+            river_ds.river_Eposition.values = s_eta
+
+        river_ds.river.values = ds.river[-1].values + 1
+        ds = xr.concat([ds, river_ds], dim="river")
+
+        return ds
+
+
+class OutputHandler:
+    """
+    Provides some method to fix ROMS grid.
+    """
+    def __init__(self, grid_ds):
+        self.up_xi = grid_ds.dims['xi_rho'] - 1
+        self.up_eta = grid_ds.dims['eta_rho'] - 1
+        self.grid_ds = grid_ds
+
+    def get_xi_slice(self, xi, delta):
+        return slice(max(min(xi - delta, self.up_xi), 0), max(min(xi + delta + 1, self.up_xi), 0))
+
+    def get_eta_slice(self, eta, delta):
+        return slice(max(min(eta - delta, self.up_eta), 0), max(min(eta + delta + 1, self.up_eta), 0))
+
+    def plot_u_v(self, ds, xi, eta, s=-1, delta=10):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        u = ds.u.isel(xi_u=xi_slice, eta_u=eta_slice, s_rho=s) #  * \
+            # self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice)
+        plt.subplot(121)
+        u.plot()
+
+        v = ds.v.isel(xi_v=xi_slice, eta_v=eta_slice, s_rho=s) # * \
+            # self.grid_ds.mask_v.isel(xi_v=xi_slice, eta_v=eta_slice)
+        plt.subplot(122)
+        v.plot()
+
+        return u, v
 
 
 if __name__ == "__main__":
