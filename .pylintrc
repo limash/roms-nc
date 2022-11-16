@@ -1,6 +1,16 @@
+[MASTER]
+disable=
+    C0116, # missing-function-docstring
+
 [BASIC]
 # Good variable names which should always be accepted, separated by a comma.
 good-names=i, j, k, df, foo, bar, ax, l0, l1, l2, ds
 
 [FORMAT]
 max-line-length=119
+
+[DESIGN]
+# Maximum number of locals for function / method body
+max-locals=30
+# Maximum number of arguments for function / method
+max-args=10

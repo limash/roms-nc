@@ -2,6 +2,7 @@
 Function for ROMS output files.
 """
 import numpy as np
+import scipy as sp
 
 
 def tranform_to_z(ds):
@@ -65,6 +66,115 @@ def gen_rivers_map(ds, grid_ds):
         riv_map[x_pos, y_pos] = np.NaN
 
     return riv_map
+
+
+class GridHandler:
+    """
+    Provides some method to fix ROMS grid.
+    """
+    def __init__(self, grid_ds):
+        self.grid_ds = grid_ds
+
+    @staticmethod
+    def update_u_v_psi_masks_from_rho_mask(grid_ds):
+        """
+        Rewrite other masks
+        Andre matlab code:
+        % mask at u, v and psi points
+        mask_u = mask_rho(:,1:end-1).*mask_rho(:,2:end);
+        mask_v = mask_rho(1:end-1,:).*mask_rho(2:end,:);
+        mask_psi = ...
+            mask_rho(1:end-1,1:end-1).*mask_rho(1:end-1,2:end).*...
+            mask_rho(2:end,1:end-1).*mask_rho(2:end,2:end);
+        """
+        left_mask = grid_ds.mask_rho.isel(xi_rho=slice(1, None)).values  # left border
+        right_mask = grid_ds.mask_rho.isel(xi_rho=slice(None, -1)).values  # Right border
+        u_mask = left_mask * right_mask
+        grid_ds.mask_u.values = u_mask
+
+        bottom_mask = grid_ds.mask_rho.isel(eta_rho=slice(1, None)).values  # bottom border
+        upper_mask = grid_ds.mask_rho.isel(eta_rho=slice(None, -1)).values  # upper border
+        v_mask = bottom_mask * upper_mask
+        grid_ds.mask_v.values = v_mask
+
+        rho_mask = grid_ds.mask_rho.values
+        psi_mask = (
+            rho_mask[:-1, :-1] * rho_mask[:-1, 1:] *
+            rho_mask[1:, :-1] * rho_mask[1:, 1:]
+        )
+        grid_ds.mask_psi.values = psi_mask
+
+        return grid_ds
+
+    @staticmethod
+    def to_netcdf(grid_ds, name):
+        grid_ds.to_netcdf(path=f'fram_data/norfjords_160m_grid_{name}.nc', format='NETCDF4')
+
+    @staticmethod
+    def filter_gaussian(grid_ds, sigma=1):
+        """
+        Applies gaussian filter to ds.h.values
+        """
+        new_values = sp.ndimage.gaussian_filter(grid_ds.h.values, sigma, mode='nearest')
+        grid_ds.h.values = new_values
+
+        return grid_ds
+
+    @staticmethod
+    def filter_min_depth(grid_ds, min_depth=10):
+        grid_ds['h'] = grid_ds.h.where(grid_ds.h > min_depth, min_depth)
+
+        return grid_ds
+
+    def find_matches(self, border_position: str):
+        """
+        find indices of matches
+        """
+        up_eta_rho = self.grid_ds.dims['eta_rho']
+        up_xi_rho = self.grid_ds.dims['xi_rho']
+
+        border = {
+            'west': self.grid_ds.mask_rho.isel(xi_rho=slice(0, 2)),
+            'north': self.grid_ds.mask_rho.isel(eta_rho=slice(up_eta_rho-2, up_eta_rho)),  # grid_ds.mask_rho[-2:, :]
+            'east': self.grid_ds.mask_rho.isel(xi_rho=slice(up_xi_rho-2, up_xi_rho)),
+            'south': self.grid_ds.mask_rho.isel(eta_rho=slice(0, 2)),
+        }
+
+        pattern = {
+            'west': np.array([[1., 0.]]),
+            'north': np.array([[0.], [1.]]),
+            'east': np.array([[0., 1.]]),
+            'south': np.array([[1.], [0.]]),
+        }
+
+        if border_position in ('north', 'south'):
+            idx = np.argwhere(np.asarray(border[border_position].values == pattern[border_position],
+                              dtype=np.int32).transpose() @ np.array([1, 1]) > 1)
+        elif border_position in ('west', 'east'):
+            idx = np.argwhere(np.asarray(border[border_position].values == pattern[border_position],
+                              dtype=np.int32) @ np.array([1, 1]) > 1)
+        else:
+            raise ValueError
+
+        print(f"{border_position} indices: {idx.transpose()[0]}")
+
+        return idx
+
+    def get_values(self, eta_rho, xi_rho):
+        try:
+            return self.grid_ds.mask_rho.isel(eta_rho=eta_rho, xi_rho=xi_rho).values
+        except IndexError:
+
+            return np.NAN
+
+    def print_values(self, west_idx, north_idx, east_idx, south_idx):
+        up_eta_rho = self.grid_ds.dims['eta_rho']
+        up_xi_rho = self.grid_ds.dims['xi_rho']
+
+        print(f"West values: {self.get_values(eta_rho=west_idx.squeeze(), xi_rho=0)}")
+        print(f"North values: {self.get_values(eta_rho=up_eta_rho-1, xi_rho=north_idx.squeeze())}")
+        print(f"East values: {self.get_values(eta_rho=east_idx.squeeze(), xi_rho=up_xi_rho-1)}")
+        print(f"South values: {self.get_values(eta_rho=0, xi_rho=south_idx.squeeze())}")
 
 
 if __name__ == "__main__":
