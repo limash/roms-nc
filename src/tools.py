@@ -264,10 +264,12 @@ class RiversHandler:
 
     def plot_rivers_luv(self, river_xi_eta_dir):
         """
-        Probably, not sure: Due to roms notation where rho points start from zero
-        (so not such points in fortran), eta coordinate in mask_u already "has"
-        pythonic coordinates : bullshit - smth probably bad with a rivers forcing.
+        Probably, not sure: Due to roms notation where rho points start from zero,
+        buy u and v start from 1, to show them on map, where all point start from 0 (in python),
+        we need for rivers in 0 (u) direction subtract 1 from xi coordinate
+                              1 (v)                           eta
         https://www.myroms.org/wiki/Grid_Generation
+        https://www.myroms.org/wiki/River_Runoff
 
         Args:
             river_xi_eta_dir: a list of river, xi, eta, dir
@@ -458,24 +460,65 @@ class OutputHandler:
     def get_eta_slice(self, eta, delta):
         return slice(max(min(eta - delta, self.up_eta), 0), max(min(eta + delta + 1, self.up_eta), 0))
 
-    def plot_u_v(self, ds, xi, eta, s=-1, delta=10):
+    def plot_masks(self, xi, eta, delta=10):
 
         plt.figure(figsize=(15, 4))
 
         xi_slice = self.get_xi_slice(xi, delta)
         eta_slice = self.get_eta_slice(eta, delta)
 
-        u = ds.u.isel(xi_u=xi_slice, eta_u=eta_slice, s_rho=s) #  * \
+        plt.subplot(121)
+        self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice).plot()
+
+        plt.subplot(122)
+        self.grid_ds.mask_v.isel(xi_v=xi_slice, eta_v=eta_slice).plot()
+
+    def plot_u_v(self, ds, xi, eta, s=-1, ocean_time=-1, delta=5):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        u = ds.u.isel(xi_u=xi_slice, eta_u=eta_slice, s_rho=s, ocean_time=ocean_time) #  * \
+            # self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice)
+        plt.subplot(121)
+        u.plot.pcolormesh(cmap='brg')
+
+        v = ds.v.isel(xi_v=xi_slice, eta_v=eta_slice, s_rho=s, ocean_time=ocean_time) # * \
+            # self.grid_ds.mask_v.isel(xi_v=xi_slice, eta_v=eta_slice)
+        plt.subplot(122)
+        v.plot.pcolormesh(cmap='brg')
+
+        return u, v
+
+    def plot_ubar_vbar(self, ds, xi, eta, ocean_time=-1, delta=5):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        u = ds.ubar.isel(xi_u=xi_slice, eta_u=eta_slice, ocean_time=ocean_time) #  * \
             # self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice)
         plt.subplot(121)
         u.plot()
 
-        v = ds.v.isel(xi_v=xi_slice, eta_v=eta_slice, s_rho=s) # * \
+        v = ds.vbar.isel(xi_v=xi_slice, eta_v=eta_slice, ocean_time=ocean_time) # * \
             # self.grid_ds.mask_v.isel(xi_v=xi_slice, eta_v=eta_slice)
         plt.subplot(122)
         v.plot()
 
-        return u, v
+    def plot_zeta(self, ds, xi, eta, ocean_time=-1, delta=5):
+
+        plt.figure(figsize=(7, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        (self.grid_ds.mask_rho.isel(xi_rho=xi_slice, eta_rho=eta_slice) *
+         ds.zeta.isel(ocean_time=ocean_time,
+                      xi_rho=xi_slice, eta_rho=eta_slice)).plot()
 
 
 if __name__ == "__main__":
