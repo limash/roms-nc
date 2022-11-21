@@ -351,6 +351,14 @@ class RiversHandler:
         return river_xi_eta_dir
 
     @staticmethod
+    def limit_transport(river_ds, min_val=-10, max_val=10):
+        river_ds['river_transport'] = river_ds.river_transport.where(river_ds.river_transport < max_val, max_val)
+        river_ds['river_transport'] = river_ds.river_transport.where(river_ds.river_transport > min_val, min_val)
+
+        return river_ds
+
+
+    @staticmethod
     def gen_rivers_map(river_ds, grid_ds):
         """
         Generates a numpy array with NaN values at the places of rivers.
