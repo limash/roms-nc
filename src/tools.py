@@ -276,10 +276,10 @@ class RiversHandler:
         """
         for river, xi, eta, direction in river_xi_eta_dir:
             if direction == 0:
-                xi, eta = xi - 1, eta
+                xi, eta = xi - 1, eta  # pylint: disable=self-assigning-variable
                 self.plot_river_estuary_u(river, xi, eta, direction)
             else:
-                xi, eta = xi, eta - 1
+                xi, eta = xi, eta - 1  # pylint: disable=self-assigning-variable
                 self.plot_river_estuary_v(river, xi, eta, direction)
 
     def plot_rivers_lw(self, river_xi_eta_dir):
@@ -325,8 +325,8 @@ class RiversHandler:
             if x_pos in xis and y_pos in etas:
                 print(f"River: {int(river_id_orig)}; Xi: {x_pos}; Eta: {y_pos}")
 
-    @staticmethod
-    def check_rivers_runoff(river_ds, verbose=False, runoff=0):
+    @classmethod
+    def check_rivers_runoff(cls, river_ds, verbose=False, runoff=0):
         """
         Returns coordinates and direction for rivers with runoff >= threshold
         By default it will return all rivers (runoff > 0)
@@ -349,6 +349,13 @@ class RiversHandler:
                 ))
 
         return river_xi_eta_dir
+
+    @classmethod
+    def get_bad_rivers(cls, river_ds, bad_rivers_numbers):
+        river_xi_eta_dir = RiversHandler.check_rivers_runoff(river_ds, verbose=False)
+        bad_rivers = [river_xi_eta_dir[coord] for coord in bad_rivers_numbers]
+        print(bad_rivers)
+        return bad_rivers
 
     @staticmethod
     def limit_transport(river_ds, min_val=-10, max_val=10):
