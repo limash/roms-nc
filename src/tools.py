@@ -191,7 +191,7 @@ class RiversHandler:
     def get_eta_slice(self, eta, delta):
         return slice(max(min(eta - delta, self.up_eta), 0), max(min(eta + delta + 1, self.up_eta), 0))
 
-    def plot_river_estuary_u(self, river, river_xi, river_eta, river_dir):
+    def plot_river_estuary_u(self, river, river_xi, river_eta, river_dir, roff):
 
         assert river_dir == 0
         mask_u = self.grid_ds.mask_u.copy()
@@ -214,9 +214,9 @@ class RiversHandler:
             eta_u=eta_slice,
             ).plot()
         # to show the fortran locations
-        plt.suptitle(f"River: {river}; Xi: {river_xi+1}; Eta: {river_eta}; Direction: {river_dir}.")
+        plt.suptitle(f"River: {river}; Xi: {river_xi+1}; Eta: {river_eta}; Direction: {river_dir}, Runoff: {roff}.")
 
-    def plot_river_estuary_v(self, river, river_xi, river_eta, river_dir):
+    def plot_river_estuary_v(self, river, river_xi, river_eta, river_dir, roff):
 
         assert river_dir == 1
         mask_v = self.grid_ds.mask_v.copy()
@@ -239,7 +239,7 @@ class RiversHandler:
             eta_v=eta_slice,
             ).plot()
         # to show the fortran locations
-        plt.suptitle(f"River: {river}; Xi: {river_xi}; Eta: {river_eta+1}; Direction: {river_dir}.")
+        plt.suptitle(f"River: {river}; Xi: {river_xi}; Eta: {river_eta+1}; Direction: {river_dir}, Runoff: {roff}.")
 
     def plot_river_estuary_rho(self, river, river_xi, river_eta, river_dir):
 
@@ -262,7 +262,7 @@ class RiversHandler:
         # to show the fortran locations
         plt.suptitle(f"River: {river}; Xi: {river_xi+1}; Eta: {river_eta+1}; Direction: {river_dir}.")
 
-    def plot_rivers_luv(self, river_xi_eta_dir):
+    def plot_rivers_luv(self, river_xi_eta_dir_roff):
         """
         Probably, not sure: Due to roms notation where rho points start from zero,
         buy u and v start from 1, to show them on map, where all point start from 0 (in python),
@@ -274,13 +274,13 @@ class RiversHandler:
         Args:
             river_xi_eta_dir: a list of river, xi, eta, dir
         """
-        for river, xi, eta, direction in river_xi_eta_dir:
+        for river, xi, eta, direction, roff in river_xi_eta_dir_roff:
             if direction == 0:
                 xi, eta = xi - 1, eta  # pylint: disable=self-assigning-variable
-                self.plot_river_estuary_u(river, xi, eta, direction)
+                self.plot_river_estuary_u(river, xi, eta, direction, roff)
             else:
                 xi, eta = xi, eta - 1  # pylint: disable=self-assigning-variable
-                self.plot_river_estuary_v(river, xi, eta, direction)
+                self.plot_river_estuary_v(river, xi, eta, direction, roff)
 
     def plot_rivers_lw(self, river_xi_eta_dir):
         for river, xi, eta, direction in river_xi_eta_dir:
@@ -322,8 +322,10 @@ class RiversHandler:
             river_id = int(river_id_orig-1)
             x_pos = int(ds.river_Xposition[river_id].values)
             y_pos = int(ds.river_Eposition[river_id].values)
+            dirct = int(ds.river_direction[river_id].values)
+            roff = ds.river_transport.isel(river=river_id, river_time=0).values
             if x_pos in xis and y_pos in etas:
-                print(f"River: {int(river_id_orig)}; Xi: {x_pos}; Eta: {y_pos}")
+                print(f"River: {int(river_id_orig)}; Xi: {x_pos}; Eta: {y_pos}; Dir: {dirct}; Runoff: {roff}")
 
     @classmethod
     def check_rivers_runoff(cls, river_ds, verbose=False, runoff=0):
@@ -331,7 +333,7 @@ class RiversHandler:
         Returns coordinates and direction for rivers with runoff >= threshold
         By default it will return all rivers (runoff > 0)
         """
-        river_xi_eta_dir = []
+        river_xi_eta_dir_roff = []
         for i in range(river_ds.dims['river']):
             river = river_ds.isel(river=i, river_time=0)
             assert i+1 == int(river.river)
@@ -341,14 +343,41 @@ class RiversHandler:
                     print(f"River {i+1} max runoff: {cell_runoff}")
                     print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
                     print(f"Direction: {river.river_direction} \n")
-                river_xi_eta_dir.append((
+                river_xi_eta_dir_roff.append((
                     int(river.river),
                     int(river.river_Xposition.values),
                     int(river.river_Eposition.values),
-                    int(river.river_direction.values)
+                    int(river.river_direction.values),
+                    cell_runoff
                 ))
 
-        return river_xi_eta_dir
+        return river_xi_eta_dir_roff
+
+    @classmethod
+    def check_rivers_entire_runoff(cls, river_ds, verbose=False, runoff=0):
+        """
+        Returns coordinates and direction for rivers with runoff >= threshold
+        By default it will return all rivers (runoff > 0)
+        """
+        river_xi_eta_dir_roff = []
+        for i in range(river_ds.dims['river']):
+            river = river_ds.isel(river=i, river_time=0)
+            assert i+1 == int(river.river)
+            cell_runoff = abs(river.river_transport.values)
+            if cell_runoff >= runoff:
+                if verbose:
+                    print(f"River {i+1} max runoff: {cell_runoff}")
+                    print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
+                    print(f"Direction: {river.river_direction} \n")
+                river_xi_eta_dir_roff.append((
+                    int(river.river),
+                    int(river.river_Xposition.values),
+                    int(river.river_Eposition.values),
+                    int(river.river_direction.values),
+                    cell_runoff
+                ))
+
+        return river_xi_eta_dir_roff
 
     @classmethod
     def get_bad_rivers(cls, river_ds, bad_rivers_numbers):
@@ -363,7 +392,6 @@ class RiversHandler:
         river_ds['river_transport'] = river_ds.river_transport.where(river_ds.river_transport > min_val, min_val)
 
         return river_ds
-
 
     @staticmethod
     def gen_rivers_map(river_ds, grid_ds):
@@ -400,8 +428,9 @@ class RiversHandler:
 
         return river_ds
 
-    @staticmethod
+    @classmethod
     def split_river(
+        cls,
         ds,
         number: float,
         dir_swap: bool = False,
@@ -458,6 +487,40 @@ class RiversHandler:
         ds = xr.concat([ds, river_ds], dim="river")
 
         return ds
+
+    def split_report(
+        self,
+        river_ds,
+        number: float,
+        dir_swap: bool = False,
+        flux_swap: bool = False,
+        f_xi: Optional[float] = None,
+        f_eta: Optional[float] = None,
+        s_xi: Optional[float] = None,
+        s_eta: Optional[float] = None,
+        ):
+
+        river_ds = RiversHandler.split_river(river_ds, number,
+                                             dir_swap=dir_swap,
+                                             flux_swap=flux_swap,
+                                             f_xi=f_xi, f_eta=f_eta,
+                                             s_xi=s_xi, s_eta=s_eta)
+        oldriv = river_ds.sel(river=number)
+        oldriv_c = (int(oldriv.river),
+                    int(oldriv.river_Xposition.values),
+                    int(oldriv.river_Eposition.values),
+                    int(oldriv.river_direction.values),
+                    oldriv.river_transport.isel(river_time=0).values),
+        newriv = river_ds.isel(river=-1)
+        newriv_c = (int(newriv.river),
+                    int(newriv.river_Xposition.values),
+                    int(newriv.river_Eposition.values),
+                    int(newriv.river_direction.values),
+                    newriv.river_transport.isel(river_time=0).values),
+        self.plot_rivers_luv(oldriv_c)
+        self.plot_rivers_luv(newriv_c)
+
+        return river_ds
 
 
 class OutputHandler:
