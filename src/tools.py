@@ -7,6 +7,9 @@ import numpy as np
 import scipy as sp
 import xarray as xr
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set_style("darkgrid")
 
 
 def tranform_to_z(ds):
@@ -568,8 +571,6 @@ class OutputHandler:
         plt.subplot(122)
         v.plot.pcolormesh(cmap='brg')
 
-        return u, v
-
     def plot_ubar_vbar(self, ds, xi, eta, ocean_time=-1, delta=5):
 
         plt.figure(figsize=(15, 4))
@@ -597,6 +598,57 @@ class OutputHandler:
         (self.grid_ds.mask_rho.isel(xi_rho=xi_slice, eta_rho=eta_slice) *
          ds.zeta.isel(ocean_time=ocean_time,
                       xi_rho=xi_slice, eta_rho=eta_slice)).plot()
+
+    @staticmethod
+    def check_zeta(ds):
+        """
+        da_stacked containes values of zeta < -1 and their coordinates
+        """
+        da = ds.zeta.isel(ocean_time=-1)
+        da_stacked = da.where(da<-1).stack(x=['eta_rho','xi_rho'])
+        da_stacked = da_stacked[da_stacked.notnull()]
+        return da_stacked
+
+    @staticmethod
+    def check_temp(ds):
+        """
+        Finds lacations (eta, xi, s) of the points with high temperature
+        """
+        temp_da = ds.temp.isel(ocean_time=-1)
+        temp_da_stacked = temp_da.where(temp_da>12).stack(x=['eta_rho', 'xi_rho', 's_rho'])
+        temp_da_stacked = temp_da_stacked[temp_da_stacked.notnull()]
+        return temp_da_stacked
+
+    @staticmethod
+    def check_v(ds):
+        """
+        Finds lacations (eta, xi, s) of the points with high v
+        """
+        da = ds.v.isel(ocean_time=-1)
+        da_stacked = da.where(da>4).stack(x=['eta_v', 'xi_v', 's_rho'])
+        da_stacked = da_stacked[da_stacked.notnull()]
+        return da_stacked
+
+    @staticmethod
+    def plot_bad_temp(ds, temp_da_point):
+        bad_temp_point = temp_da_point
+        eta, xi, s = bad_temp_point.eta_rho.values, bad_temp_point.xi_rho.values, bad_temp_point.s_rho.values
+        print(f"Xi: {xi}; Eta: {eta}")
+        ds.temp.isel(ocean_time=-1,
+                     eta_rho=slice(eta-5,eta+5),
+                     xi_rho=slice(xi-5,xi+5)).sel(s_rho=s).plot(figsize=(10, 5))
+
+    @staticmethod
+    def plot_entire_u(ds):
+        ds.u.isel(ocean_time=-1, s_rho=-1).plot()
+
+    @staticmethod
+    def plot_entire_v(ds):
+        ds.v.isel(ocean_time=-1, s_rho=-1).plot()
+
+    @staticmethod
+    def plot_entire_masked_zeta(grid_ds, ds):
+        (grid_ds.mask_rho * ds.zeta.isel(ocean_time=-1)).plot()
 
 
 if __name__ == "__main__":
