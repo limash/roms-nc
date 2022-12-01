@@ -8,6 +8,7 @@ import scipy as sp
 import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import interpolate
 
 sns.set_style("darkgrid")
 
@@ -311,6 +312,23 @@ class RiversHandler:
         # Remove old and add new variables with new s_rho=40 dimension
         river_ds = river_ds.drop_dims('s_rho')
         river_ds = river_ds.assign(river_Vshape=river_vshape, river_temp=river_temp, river_salt=river_salt)
+
+        return river_ds
+
+    @staticmethod
+    def stretch_s_layers(river_ds, stretch_to = 10):
+        n_rivers = river_ds.dims['river']
+        for n_river in range(1, n_rivers+1):
+            na_river = river_ds.river_Vshape.sel(river=n_river).values
+            n_points = np.count_nonzero(na_river)
+            if n_points < stretch_to:
+                x = np.arange(0, n_points)
+                y = na_river[-n_points:]
+                f = interpolate.interp1d(x, y)
+                xnew = np.linspace(0, n_points-1, num=stretch_to)
+                ynew = f(xnew)
+                ynew_unity = ynew / np.sum(ynew)
+                river_ds.river_Vshape.loc[-stretch_to:, n_river] = ynew_unity
 
         return river_ds
 
