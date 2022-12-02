@@ -617,6 +617,27 @@ class OutputHandler:
          ds.zeta.isel(ocean_time=ocean_time,
                       xi_rho=xi_slice, eta_rho=eta_slice)).plot()
 
+    def plot_temp_salt(self, ds, xi, eta, s=-1, ocean_time=-1, delta=5):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        salt = ds.salt.isel(ocean_time=ocean_time,
+                     xi_rho=xi_slice,
+                     eta_rho=eta_slice,
+                     s_rho=s)
+        plt.subplot(121)
+        salt.plot.pcolormesh(cmap='brg')
+
+        temp = ds.temp.isel(ocean_time=ocean_time,
+                     xi_rho=xi_slice,
+                     eta_rho=eta_slice,
+                     s_rho=s)
+        plt.subplot(122)
+        temp.plot.pcolormesh(cmap='brg')
+
     @staticmethod
     def check_zeta(ds):
         """
