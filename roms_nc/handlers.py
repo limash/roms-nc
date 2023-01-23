@@ -2,15 +2,48 @@
 Function for ROMS output files.
 """
 from typing import Optional
+import cftime
 
 import numpy as np
 import scipy as sp
 import xarray as xr
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy import interpolate
 
 sns.set_style("darkgrid")
+
+
+def extrapolate_fill(ds, parameter_tuple):
+    """
+    ds: boundary dataset
+    parameter_tuple: temp_tuple | salt_tuple
+    for example: par_tuple = ('temp_north', 'salt_north', 'temp_south', 'salt_south')
+    """
+    for name in parameter_tuple:
+        ds[name] = ds[name].interpolate_na(dim="xi_rho", method="linear", fill_value="extrapolate")
+    print("Extrapolate NaNs")
+    return ds
+
+
+def interpolate_cice(
+    filepath: str, var_name: str, time_name: str,
+    roms_grid_ds: xr.Dataset
+    ):
+    """
+    Interpolates var_name variables for the certain time_name timesteps
+    to the coordinates from roms_grid_ds
+
+    Returns:
+        A dataset for a grid from roms_grid_ds
+    """
+    ds = xr.open_dataset(filepath)
+
+    coords = {
+        time_name: ds[var_name][time_name],
+        'lon': roms_grid_ds.lon_rho,
+        'lat': roms_grid_ds.lat_rho,
+    }
+    return ds[var_name].interp(coords)
 
 
 def tranform_to_z(ds):
@@ -26,6 +59,12 @@ def tranform_to_z(ds):
     else:
         raise ValueError
     return z_rho.transpose()
+
+
+def assign_new_time(ds, path):
+    time_cftime = cftime.datetime(2017, 1, 15)
+    ds = ds.assign_coords(ocean_time=[time_cftime])
+    ds.to_netcdf(path=path, format='NETCDF4')
 
 
 def roho160_tranform_to_z(ds):
@@ -167,7 +206,6 @@ class GridHandler:
         try:
             return self.grid_ds.mask_rho.isel(eta_rho=eta_rho, xi_rho=xi_rho).values
         except IndexError:
-
             return np.NAN
 
     def print_values(self, west_idx, north_idx, east_idx, south_idx):
@@ -324,7 +362,7 @@ class RiversHandler:
             if n_points < stretch_to:
                 x = np.arange(0, n_points)
                 y = na_river[-n_points:]
-                f = interpolate.interp1d(x, y)
+                f = sp.interpolate.interp1d(x, y)
                 xnew = np.linspace(0, n_points-1, num=stretch_to)
                 ynew = f(xnew)
                 ynew_unity = ynew / np.sum(ynew)
@@ -589,6 +627,18 @@ class OutputHandler:
         plt.subplot(122)
         v.plot.pcolormesh(cmap='brg')
 
+    def plot_w(self, ds, xi, eta, s=-1, ocean_time=-1, delta=5):
+
+        plt.figure(figsize=(15, 4))
+
+        xi_slice = self.get_xi_slice(xi, delta)
+        eta_slice = self.get_eta_slice(eta, delta)
+
+        w = ds.w.isel(xi_rho=xi_slice, eta_rho=eta_slice, s_w=s, ocean_time=ocean_time) #  * \
+            # self.grid_ds.mask_u.isel(xi_u=xi_slice, eta_u=eta_slice)
+        plt.subplot(111)
+        w.plot.pcolormesh(cmap='brg')
+
     def plot_ubar_vbar(self, ds, xi, eta, ocean_time=-1, delta=5):
 
         plt.figure(figsize=(15, 4))
@@ -682,12 +732,11 @@ class OutputHandler:
         ds.u.isel(ocean_time=-1, s_rho=-1).plot()
 
     @staticmethod
-    def plot_entire_v(ds):
-        ds.v.isel(ocean_time=-1, s_rho=-1).plot()
+    def plot_entire_v(ds, s=-1, ocean_time=-1):
+        ds.v.isel(ocean_time=ocean_time, s_rho=s).plot()
 
-    @staticmethod
-    def plot_entire_masked_zeta(grid_ds, ds):
-        (grid_ds.mask_rho * ds.zeta.isel(ocean_time=-1)).plot()
+    def plot_entire_masked_zeta(self, ds):
+        (self.grid_ds.mask_rho * ds.zeta.isel(ocean_time=-1)).plot(figsize=(14, 7))
 
 
 if __name__ == "__main__":
