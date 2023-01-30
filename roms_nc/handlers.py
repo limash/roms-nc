@@ -19,9 +19,8 @@ def extrapolate_fill(ds, parameter_tuple):
     parameter_tuple: temp_tuple | salt_tuple
     for example: par_tuple = ('temp_north', 'salt_north', 'temp_south', 'salt_south')
     """
-    for name in parameter_tuple:
-        ds[name] = ds[name].interpolate_na(dim="xi_rho", method="linear", fill_value="extrapolate")
-    print("Extrapolate NaNs")
+    for name, dim in parameter_tuple:
+        ds[name] = ds[name].interpolate_na(dim=dim, method="linear", fill_value="extrapolate")
     return ds
 
 
