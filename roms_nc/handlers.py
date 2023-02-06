@@ -399,8 +399,8 @@ class RiversHandler:
             if cell_runoff >= runoff:
                 if verbose:
                     print(f"River {i+1} max runoff: {cell_runoff}")
-                    print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
                     print(f"Direction: {river.river_direction} \n")
+                    print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
                 river_xi_eta_dir_roff.append((
                     int(river.river),
                     int(river.river_Xposition.values),
@@ -412,29 +412,36 @@ class RiversHandler:
         return river_xi_eta_dir_roff
 
     @classmethod
-    def check_rivers_entire_runoff(cls, river_ds, verbose=False, runoff=0):
+    def check_rivers_entire_runoff(
+        cls,
+        river_ds,
+        time_slice = slice('2017-01-15','2019-12-31'),
+        verbose=False,
+        runoff=0
+        ):
         """
         Returns coordinates and direction for rivers with runoff >= threshold
         By default it will return all rivers (runoff > 0)
         """
         river_xi_eta_dir_roff = []
-        for i in range(river_ds.dims['river']):
-            river = river_ds.isel(river=i, river_time=0)
-            assert i+1 == int(river.river)
-            cell_runoff = abs(river.river_transport.values)
-            if cell_runoff >= runoff:
+        for river_number in river_ds.coords['river']:
+            river_max_runoff = abs(river_ds.river_transport.sel(
+                river_time=time_slice,
+                river=river_number
+                )).max().values
+            river = river_ds.sel(river=river_number)
+            if river_max_runoff >= runoff:
                 if verbose:
-                    print(f"River {i+1} max runoff: {cell_runoff}")
+                    print(f"River {river_number} max runoff: {river_max_runoff}")
                     print(f"Coordinates: {river.river_Xposition}; {river.river_Eposition}")
                     print(f"Direction: {river.river_direction} \n")
                 river_xi_eta_dir_roff.append((
-                    int(river.river),
+                    int(river_number),
                     int(river.river_Xposition.values),
                     int(river.river_Eposition.values),
                     int(river.river_direction.values),
-                    cell_runoff
+                    int(river_max_runoff)
                 ))
-
         return river_xi_eta_dir_roff
 
     @classmethod
