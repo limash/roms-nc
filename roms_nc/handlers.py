@@ -13,6 +13,13 @@ import seaborn as sns
 sns.set_style("darkgrid")
 
 
+def make_fake_std(ds):
+    variables = ['salt', 'temp', 'u', 'v', 'ubar', 'vbar']
+    ds[variables] = ds[variables].where(ds[variables] == 1, other = 1)
+    ds['zeta'] = ds['zeta'].where(ds['zeta'] == 0.01, other = 0.01)
+    return ds
+
+
 def extrapolate_fill(ds, parameter_tuple):
     """
     ds: boundary dataset
