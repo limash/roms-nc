@@ -8,8 +8,8 @@ version = "0.0.1"
 requires-python = ">=3.9"
 dependencies = [
     "xarray[complete] == 2023.1.0",
+    "ipykernel",
 ]
 
 [tool.setuptools.packages.find]
 include = ["roms_nc"]
-
