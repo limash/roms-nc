@@ -14,9 +14,15 @@ sns.set_style("darkgrid")
 
 
 def make_fake_std(ds):
-    variables = ['salt', 'temp', 'u', 'v', 'ubar', 'vbar']
-    ds[variables] = ds[variables].where(ds[variables] == 1, other = 1)
-    ds['zeta'] = ds['zeta'].where(ds['zeta'] == 0.01, other = 0.01)
+    # variables = ['salt', 'temp', 'u', 'v', 'ubar', 'vbar']
+    # ds[variables] = ds[variables].where(ds[variables] == 1, other = 1)
+    ds['salt'] = ds['salt'].where(ds['salt'] == 10, other = 10)
+    ds['temp'] = ds['temp'].where(ds['temp'] == 10, other = 10)
+    ds['u'] = ds['u'].where(ds['u'] == 1, other = 1)
+    ds['v'] = ds['v'].where(ds['v'] == 1, other = 1)
+    ds['ubar'] = ds['ubar'].where(ds['ubar'] == 1, other = 1)
+    ds['vbar'] = ds['vbar'].where(ds['vbar'] == 1, other = 1)
+    ds['zeta'] = ds['zeta'].where(ds['zeta'] == 1, other = 1)
     return ds
 
 
