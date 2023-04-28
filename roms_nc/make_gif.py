@@ -8,8 +8,8 @@ from PIL import Image
 
 def plot_temp_salt_contour(time_str, temp, salt, save_dir=None, counter=None):
 
-    temp_levs = np.linspace(0, 10, 11)
-    salt_levs = np.linspace(10, 36, 27)
+    temp_levs = np.linspace(-4, 15, 60)
+    salt_levs = np.linspace(0, 38, 100)
 
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(14, 7))
     cf_temp = axs[0].contourf(temp[:,:], cmap='coolwarm', levels=temp_levs)
@@ -36,21 +36,21 @@ def make_gif(frame_folder, gifname):
 
 
 def save_plots():
-    dir = '/cluster/projects/nn9297k/ROHO160+/OutputData/s_layers_25/2_dec2018-sep2019/'
-    ds_temp = xr.open_dataset(dir + 'roho160_temp.nc')
-    ds_salt = xr.open_dataset(dir + 'roho160_salt.nc')
+    folder = '/cluster/projects/nn9297k/ROHO160+/OutputData/s_layers_25/1_dec2017-dec2018/'
+    ds_temp = xr.open_dataset(folder + 'roho160_temp_0.nc')
+    ds_salt = xr.open_dataset(folder + 'roho160_salt_0.nc')
 
     for i in range(ds_temp['ocean_time'].shape[0]):
         plot_temp_salt_contour(
             time_str=str(ds_temp['ocean_time'].isel(ocean_time=i).values),
             temp=ds_temp['temp'].isel(ocean_time=i, s_rho=-1).values,
             salt=ds_salt['salt'].isel(ocean_time=i, s_rho=-1).values,
-            save_dir=dir,
+            save_dir=folder,
             counter=i
             )
 
 def save_gif():
-    dir_name = '/cluster/projects/nn9297k/ROHO160+/OutputData/s_layers_25/2_dec2018-sep2019/temp_salt_contours'
+    dir_name = '/cluster/projects/nn9297k/ROHO160+/OutputData/s_layers_25/1_dec2017-dec2018/temp_salt_contours'
     gif_name = "/temp_salt.gif"
     make_gif(dir_name, gif_name)
 
@@ -58,3 +58,4 @@ def save_gif():
 if __name__ == "__main__":
     save_plots()
     save_gif()
+
