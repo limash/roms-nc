@@ -358,7 +358,7 @@ def main():
         obs_type = obs_flag*unos
         obs_error = unos   # error eqaul one scale later
         obs_Zgrid = 0*unos
-        obs_depth = 35*unos #If positive has to be the sigma level, if negative depth in meters
+        obs_depth = 25*unos #If positive has to be the sigma level, if negative depth in meters
         obs_variance=np.asarray(np.ones(Nstate))
 
 

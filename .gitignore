@@ -130,3 +130,5 @@ dmypy.json
 
 /data
 /fram_data
+
+*.swp
