@@ -169,7 +169,7 @@ class GridHandler:
         """
         Applies gaussian filter to ds.h.values
         """
-        new_values = sp.ndimage.gaussian_filter(grid_ds.h.values, sigma, mode='nearest')
+        new_values = sp.ndimage.gaussian_filter(grid_ds.h.values, sigma, mode='nearest') # type: ignore
         grid_ds.h.values = new_values
 
         return grid_ds
@@ -374,7 +374,7 @@ class RiversHandler:
             if n_points < stretch_to:
                 x = np.arange(0, n_points)
                 y = na_river[-n_points:]
-                f = sp.interpolate.interp1d(x, y)
+                f = sp.interpolate.interp1d(x, y) # type: ignore
                 xnew = np.linspace(0, n_points-1, num=stretch_to)
                 ynew = f(xnew)
                 ynew_unity = ynew / np.sum(ynew)
