@@ -7,7 +7,7 @@ name = "roms_nc"
 version = "0.0.1"
 requires-python = ">=3.9"
 dependencies = [
-    "xarray[complete] == 2023.1.0",
+    "xarray[complete] == 2023.7.0",
     "ipykernel",
 ]
 
