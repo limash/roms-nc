@@ -13,3 +13,6 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 include = ["roms_nc"]
+
+[tool.pyright]
+typeCheckingMode = "off"
